@@ -1,34 +1,35 @@
 package com.orderflow.product;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Service;
 
 @Service
 public class ProductService {
     private final ProductRepository productRepository;
-    private final AtomicLong idCounter = new AtomicLong(1);
 
     public ProductService(ProductRepository productRepository){
         this.productRepository = productRepository;
     }
 
     public Product createProduct(String productName, double productPrice){
-        Product product = new Product(idCounter.getAndIncrement(), productName, productPrice);
-        productRepository.saveProduct(product);
-        return product;
+        Product product = new Product(productName, productPrice);
+        return productRepository.save(product);
     }
 
     public List<Product> getAllProducts(){
-        return productRepository.findAllProducts();
+        return productRepository.findAll();
     }
 
     public Product getProductById(Long id) {
-        return productRepository.findById(id);
+        return productRepository.findById(id).orElse(null);
     }
 
     public Product deleteProduct(Long id) {
-        return productRepository.deleteById(id);
+        Product product = getProductById(id);
+        if (product != null) {
+            productRepository.delete(product);
+        }
+        return product;
     }
 }
