@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProductController {
 
     private final ProductService productService;
-    private final AtomicLong idCounter = new AtomicLong(1);
 
     public ProductController(ProductService productService) {
         this.productService = productService;
@@ -27,8 +26,7 @@ public class ProductController {
     // POST /products
     @PostMapping
     public ResponseEntity<Product> createProduct(@RequestBody CreateProductRequest request) {
-        Product product = new Product(idCounter.getAndIncrement(), request.getName(), request.getPrice());
-        productService.createProduct(product);
+        Product product = productService.createProduct(request.getName(), request.getPrice());
         return new ResponseEntity<>(product, HttpStatus.CREATED);
     }
 

@@ -1,19 +1,23 @@
 package com.orderflow.product;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Service;
 
 @Service
 public class ProductService {
     private final ProductRepository productRepository;
+    private final AtomicLong idCounter = new AtomicLong(1);
 
     public ProductService(ProductRepository productRepository){
         this.productRepository = productRepository;
     }
 
-    public void createProduct(Product prod){
-        productRepository.saveProduct(prod);
+    public Product createProduct(String productName, double productPrice){
+        Product product = new Product(idCounter.getAndIncrement(), productName, productPrice);
+        productRepository.saveProduct(product);
+        return product;
     }
 
     public List<Product> getAllProducts(){
