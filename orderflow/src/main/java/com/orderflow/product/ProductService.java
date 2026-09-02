@@ -12,8 +12,8 @@ public class ProductService {
         this.productRepository = productRepository;
     }
 
-    public Product createProduct(String productName, double productPrice){
-        Product product = new Product(productName, productPrice);
+    public Product createProduct(String productName, double productPrice, Long quantity){
+        Product product = new Product(productName, productPrice, quantity);
         return productRepository.save(product);
     }
 
@@ -29,6 +29,17 @@ public class ProductService {
         Product product = getProductById(id);
         if (product != null) {
             productRepository.delete(product);
+        }
+        return product;
+    }
+
+    public Product updateProduct(String productName, double productPrice, Long quantity, Long id){
+        Product product = getProductById(id);
+        if(product != null){
+            product.setName(productName);
+            product.setPrice(productPrice);
+            product.setQuantity(quantity);
+            return productRepository.save(product);
         }
         return product;
     }
