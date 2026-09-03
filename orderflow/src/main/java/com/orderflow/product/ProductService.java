@@ -4,43 +4,47 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import com.orderflow.product.dto.CreateProductRequest;
+import com.orderflow.product.dto.UpdateProductRequest;
+import com.orderflow.product.exception.ProductNotFoundException;
+
 @Service
 public class ProductService {
     private final ProductRepository productRepository;
 
-    public ProductService(ProductRepository productRepository){
+    public ProductService(ProductRepository productRepository) {
         this.productRepository = productRepository;
     }
 
-    public Product createProduct(String productName, double productPrice, Long quantity){
-        Product product = new Product(productName, productPrice, quantity);
+    public Product createProduct(CreateProductRequest request) {
+        Product product = new Product();
+        product.setName(request.getName());
+        product.setPrice(request.getPrice());
+        product.setQuantity(request.getQuantity());
+
         return productRepository.save(product);
     }
 
-    public List<Product> getAllProducts(){
+    public List<Product> getAllProducts() {
         return productRepository.findAll();
     }
 
     public Product getProductById(Long id) {
-        return productRepository.findById(id).orElse(null);
+        return productRepository.findById(id).orElseThrow(() -> new ProductNotFoundException(id));
     }
 
     public Product deleteProduct(Long id) {
         Product product = getProductById(id);
-        if (product != null) {
-            productRepository.delete(product);
-        }
+        productRepository.delete(product);
         return product;
     }
 
-    public Product updateProduct(String productName, double productPrice, Long quantity, Long id){
-        Product product = getProductById(id);
-        if(product != null){
-            product.setName(productName);
-            product.setPrice(productPrice);
-            product.setQuantity(quantity);
-            return productRepository.save(product);
-        }
-        return product;
+    public Product updateProduct(UpdateProductRequest request) {
+        Product product = getProductById(request.getId());
+        product.setName(request.getName());
+        product.setPrice(request.getPrice());
+        product.setQuantity(request.getQuantity());
+        return productRepository.save(product);
     }
 }
+

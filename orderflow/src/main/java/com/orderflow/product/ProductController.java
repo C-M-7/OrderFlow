@@ -13,6 +13,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.orderflow.product.dto.CreateProductRequest;
+import com.orderflow.product.dto.UpdateProductRequest;
+
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/products")
 public class ProductController {
@@ -25,8 +30,8 @@ public class ProductController {
 
     // POST /products
     @PostMapping
-    public ResponseEntity<Product> createProduct(@RequestBody CreateProductRequest request) {
-        Product product = productService.createProduct(request.getName(), request.getPrice(), request.getQuantity());
+    public ResponseEntity<Product> createProduct(@Valid @RequestBody CreateProductRequest request) {
+        Product product = productService.createProduct(request);
         return new ResponseEntity<>(product, HttpStatus.CREATED);
     }
 
@@ -41,29 +46,24 @@ public class ProductController {
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProductById(@PathVariable Long id) {
         Product product = productService.getProductById(id);
-        if (product == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
         return new ResponseEntity<>(product, HttpStatus.OK);
     }
 
-    // PUT/products
+    // PUT /products
     @PutMapping
-    public ResponseEntity<Product> updateProduct(@RequestBody UpdateProductRequest request){
-        Product product = productService.updateProduct(request.getName(), request.getPrice(), request.getQuantity(), request.getId());
+    public ResponseEntity<Product> updateProduct(@Valid @RequestBody UpdateProductRequest request) {
+        Product product = productService.updateProduct(request);
         return new ResponseEntity<>(product, HttpStatus.OK);
-    } 
+    }
 
     // DELETE /products/{id}
     @DeleteMapping("/{id}")
     public ResponseEntity<Product> deleteProductById(@PathVariable Long id) {
         Product deletedProduct = productService.deleteProduct(id);
-        if (deletedProduct == null) {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
         return new ResponseEntity<>(deletedProduct, HttpStatus.OK);
     }
 }
+
 
 
 
