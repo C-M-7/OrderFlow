@@ -12,16 +12,21 @@ import com.orderflow.product.exception.ProductNotFoundException;
 @Service
 public class ProductService {
     private final ProductRepository productRepository;
+    private final CategoryRepository categoryRepository;
 
-    public ProductService(ProductRepository productRepository) {
+    public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository) {
         this.productRepository = productRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     public ProductResponse createProduct(CreateProductRequest request) {
+        Category category = findCategory(request.getCategoryId());
+
         Product product = new Product();
         product.setName(request.getName());
         product.setPrice(request.getPrice());
         product.setQuantity(request.getQuantity());
+        product.setCategory(category);
 
         Product savedProduct = productRepository.save(product);
         return mapToProductResponse(savedProduct);
@@ -66,5 +71,11 @@ public class ProductService {
             product.getPrice(),
             product.getQuantity()
         );
+    }
+
+    private Category findCategory(Long categoryId){
+        Category category = categoryRepository.findById(categoryId)
+                                              .orElseThrow(() -> new RuntimeException("Category not found"));
+        return category;
     }
 }

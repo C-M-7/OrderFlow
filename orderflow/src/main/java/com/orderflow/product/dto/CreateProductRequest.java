@@ -1,5 +1,7 @@
 package com.orderflow.product.dto;
 
+import java.util.concurrent.atomic.LongAccumulator;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +18,8 @@ public class CreateProductRequest {
     @NotNull(message = "Quantity is required")
     @Min(value = 0, message = "Quantity cannot be negative")
     private Long quantity;
+
+    private Long categoryId; 
 
     public String getName() {
         return name;
@@ -39,6 +43,14 @@ public class CreateProductRequest {
 
     public void setQuantity(Long quantity) {
         this.quantity = quantity;
+    }
+
+    public Long getCategoryId(){
+        return categoryId;
+    }
+
+    public void setCategoryId(Long categoryId){
+        this.categoryId = categoryId;
     }
 }
 
