@@ -74,6 +74,9 @@ public class ProductService {
     }
 
     private Category findCategory(Long categoryId){
+        if (categoryId == null) {
+            return null;
+        }
         Category category = categoryRepository.findById(categoryId)
                                               .orElseThrow(() -> new RuntimeException("Category not found"));
         return category;
