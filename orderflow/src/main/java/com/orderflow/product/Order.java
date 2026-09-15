@@ -1,6 +1,8 @@
 package com.orderflow.product;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -22,9 +24,13 @@ public class Order {
     @NotNull 
     private Double amount;
 
+    // @NotNull 
+    // @NotBlank 
+    // private String status;
+
     @NotNull 
-    @NotBlank 
-    private String status;
+    @Enumerated (EnumType.STRING)
+    private OrderStatus status;
 
     @ManyToOne 
     @JoinColumn (name="customer_id")
@@ -33,7 +39,7 @@ public class Order {
     public Order() {
     }
 
-    public Order(Double amount, String status, Customer customer) {
+    public Order(Double amount, OrderStatus status, Customer customer) {
         this.amount = amount;
         this.status = status;
         this.customer = customer;
@@ -55,11 +61,11 @@ public class Order {
         this.amount = amount;
     }
 
-    public String getStatus() {
+    public OrderStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(OrderStatus status) {
         this.status = status;
     }
 

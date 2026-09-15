@@ -31,12 +31,20 @@ class ProductApiIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
 
+    @Autowired
+    private OrderItemRepository orderItemRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
     private String baseUrl;
 
     @BeforeEach
     void setUp() {
         restTemplate = new RestTemplate();
         baseUrl = "http://localhost:" + port + "/products";
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
         productRepository.deleteAll();
     }
 
