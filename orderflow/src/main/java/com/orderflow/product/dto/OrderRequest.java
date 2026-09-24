@@ -23,7 +23,7 @@ public class OrderRequest {
     }
 
     public Long getCustomerId() {
-        return customerId;
+        return customerId;  
     }
 
     public void setCustomerId(Long customerId) {

@@ -103,8 +103,8 @@ public class OrderService {
     }
 
     private void validateStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
-        if (currentStatus == OrderStatus.CANCELLED || currentStatus == OrderStatus.DELIVERED) {
-            throw new IllegalStateException("Cannot change status of an order that is " + currentStatus);
+        if (!isValidTransition(currentStatus, newStatus)) {
+            throw new IllegalStateException("Cannot change status of an order from " + currentStatus + " to " + newStatus);
         }
     }
 
@@ -137,5 +137,19 @@ public class OrderService {
     private Product findProductById(Long productId){
         Product existingProduct = productRepository.findById(productId).orElseThrow(() -> new RuntimeException("No product found for this id"));
         return existingProduct;
+    }
+
+    private boolean isValidTransition(OrderStatus currentStatus, OrderStatus newStatus){
+        if (currentStatus == null || newStatus == null) return false;
+        return switch(currentStatus){
+            case PENDING ->
+                newStatus == OrderStatus.CONFIRMED || newStatus == OrderStatus.CANCELLED;
+            case CONFIRMED ->
+                newStatus == OrderStatus.SHIPPED || newStatus == OrderStatus.CANCELLED;
+            case SHIPPED ->
+                newStatus == OrderStatus.DELIVERED;
+            case DELIVERED, CANCELLED ->
+                false;
+        };
     }
 }
