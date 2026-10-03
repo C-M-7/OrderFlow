@@ -17,6 +17,7 @@ public class OrderItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // many order item records can belong to single order 
     @ManyToOne
     @JoinColumn(name = "order_id")
     private Order order;

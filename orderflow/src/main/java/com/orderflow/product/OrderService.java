@@ -4,12 +4,15 @@ package com.orderflow.product;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.orderflow.product.dto.OrderItemRequest;
 import com.orderflow.product.dto.OrderItemResponse;
 import com.orderflow.product.dto.OrderRequest;
 import com.orderflow.product.dto.OrderResponse;
+import com.orderflow.product.exception.InvalidOrderStatusException;
 import com.orderflow.product.exception.OrderNotFoundException;
 
 import jakarta.transaction.Transactional;
@@ -102,9 +105,52 @@ public class OrderService {
         return convertToResponse(updatedOrder);
     }
 
+    @Transactional 
+    public OrderResponse cancelOrder(Long orderId){
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new OrderNotFoundException(orderId));
+        
+        OrderStatus currentStatus = order.getStatus();
+
+        // validate transition
+        validateStatusTransition(currentStatus, OrderStatus.CANCELLED);
+
+        // restore the product quantities
+        restoreTheProductQuantities(order);
+
+        order.setStatus(OrderStatus.CANCELLED);
+        Order cancelledOrder = orderRepository.save(order);
+
+        return convertToResponse(cancelledOrder);
+    }
+
+    public OrderResponse showOrder(Long orderId){
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        return convertToResponse(order);    
+    }
+
+    public Page<OrderResponse> listAllOrders(Pageable pageable){
+        Page<Order> allOrder = orderRepository.findAll(pageable);
+
+        return allOrder.map(this::convertToResponse );
+    }
+
+    public Page<OrderResponse> getOrdersByCustomer(Long customerId, Pageable pageable){
+        findCustomerById(customerId);
+        Page<Order> customerOrders = orderRepository.findByCustomerId(customerId, pageable);
+        return customerOrders.map(this::convertToResponse);
+    }
+
+    public Page<OrderResponse> getOrdersByStatus(OrderStatus status, Pageable pageable){
+        Page<Order> statusOrders = orderRepository.findByStatus(status, pageable);
+        return statusOrders.map(this::convertToResponse);
+    }
+
     private void validateStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
         if (!isValidTransition(currentStatus, newStatus)) {
-            throw new IllegalStateException("Cannot change status of an order from " + currentStatus + " to " + newStatus);
+            throw new InvalidOrderStatusException(currentStatus, newStatus);
         }
     }
 
@@ -151,5 +197,17 @@ public class OrderService {
             case DELIVERED, CANCELLED ->
                 false;
         };
+    }
+
+    private void restoreTheProductQuantities(Order order){
+        Long orderId = order.getId();
+
+        List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
+
+        for(OrderItem orderItem : items){
+            Product product = orderItem.getProduct();
+            product.setQuantity(product.getQuantity() + orderItem.getQuantity());
+            productRepository.save(product);
+        }
     }
 }

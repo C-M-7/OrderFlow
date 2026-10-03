@@ -16,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 import com.orderflow.product.dto.OrderItemRequest;
 import com.orderflow.product.dto.OrderRequest;
 import com.orderflow.product.dto.OrderResponse;
+import com.orderflow.product.dto.OrderStatusRequest;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class OrderApiIntegrationTest {
@@ -120,5 +121,146 @@ class OrderApiIntegrationTest {
         } catch (org.springframework.web.client.HttpStatusCodeException e) {
             assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, e.getStatusCode());
         }
+    }
+
+    @Test
+    void testUpdateOrderStatusApi_Success() {
+        Customer customer = customerRepository.save(new Customer("Alice Smith", "9876543210", "alice@example.com"));
+        Order order = orderRepository.save(new Order(100.0, OrderStatus.CONFIRMED, customer));
+
+        OrderStatusRequest statusRequest = new OrderStatusRequest(OrderStatus.SHIPPED);
+        String updateUrl = baseUrl + "/" + order.getId() + "/status";
+
+        ResponseEntity<OrderResponse> response = restTemplate.postForEntity(updateUrl, statusRequest, OrderResponse.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("SHIPPED", response.getBody().getStatus());
+
+        Order updatedOrder = orderRepository.findById(order.getId()).orElseThrow();
+        assertEquals(OrderStatus.SHIPPED, updatedOrder.getStatus());
+    }
+
+    @Test
+    void testUpdateOrderStatusApi_InvalidTransition_ReturnsBadRequest() {
+        Customer customer = customerRepository.save(new Customer("Alice Smith", "9876543210", "alice@example.com"));
+        Order order = orderRepository.save(new Order(100.0, OrderStatus.PENDING, customer));
+
+        // Invalid transition: PENDING -> DELIVERED
+        OrderStatusRequest statusRequest = new OrderStatusRequest(OrderStatus.DELIVERED);
+        String updateUrl = baseUrl + "/" + order.getId() + "/status";
+
+        try {
+            restTemplate.postForEntity(updateUrl, statusRequest, String.class);
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            assertEquals(HttpStatus.BAD_REQUEST, e.getStatusCode());
+            assertEquals("Cannot change order status PENDING to DELIVERED", e.getResponseBodyAsString());
+        }
+    }
+
+    @Test
+    void testListAllOrdersApi_WithSortingAndPagination() {
+        Customer customer = customerRepository.save(new Customer("Alice Smith", "9876543210", "alice@example.com"));
+        orderRepository.save(new Order(100.0, OrderStatus.CONFIRMED, customer));
+        orderRepository.save(new Order(200.0, OrderStatus.PENDING, customer));
+
+        ResponseEntity<String> response = restTemplate.getForEntity(baseUrl + "?page=0&size=10&sort=amount,desc", String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void testGetOrdersByCustomerApi_Success() {
+        Customer customer1 = customerRepository.save(new Customer("Customer One", "1111111111", "one@example.com"));
+        Customer customer2 = customerRepository.save(new Customer("Customer Two", "2222222222", "two@example.com"));
+
+        orderRepository.save(new Order(150.0, OrderStatus.CONFIRMED, customer1));
+        orderRepository.save(new Order(300.0, OrderStatus.PENDING, customer1));
+        orderRepository.save(new Order(50.0, OrderStatus.SHIPPED, customer2));
+
+        ResponseEntity<String> response = restTemplate.getForEntity(baseUrl + "/customer/" + customer1.getId(), String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void testGetOrdersByStatusApi_Success() {
+        Customer customer = customerRepository.save(new Customer("Test Customer", "3333333333", "test@example.com"));
+        orderRepository.save(new Order(100.0, OrderStatus.CONFIRMED, customer));
+        orderRepository.save(new Order(200.0, OrderStatus.PENDING, customer));
+
+        ResponseEntity<String> response = restTemplate.getForEntity(baseUrl + "/status/CONFIRMED", String.class);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+    }
+
+    @Test
+    void testTwentyOrdersAndAllApiFlows() {
+        // 1. Create Customers
+        Customer c1 = customerRepository.save(new Customer("Customer 1", "1000000001", "c1@test.com"));
+        Customer c2 = customerRepository.save(new Customer("Customer 2", "1000000002", "c2@test.com"));
+        Customer c3 = customerRepository.save(new Customer("Customer 3", "1000000003", "c3@test.com"));
+        List<Customer> customers = List.of(c1, c2, c3);
+
+        // 2. Create Products
+        Product p1 = productRepository.save(new Product("Laptop", 1000.0, 500L));
+        Product p2 = productRepository.save(new Product("Phone", 500.0, 500L));
+        Product p3 = productRepository.save(new Product("Headphones", 100.0, 500L));
+        List<Product> products = List.of(p1, p2, p3);
+
+        // 3. Post 20 Orders via REST API
+        Long firstOrderId = null;
+        for (int i = 1; i <= 20; i++) {
+            Customer cust = customers.get(i % customers.size());
+            Product prod = products.get(i % products.size());
+            OrderItemRequest itemReq = new OrderItemRequest(prod.getId(), 1);
+            OrderRequest orderReq = new OrderRequest(cust.getId(), List.of(itemReq));
+
+            ResponseEntity<OrderResponse> resp = restTemplate.postForEntity(baseUrl, orderReq, OrderResponse.class);
+            assertEquals(HttpStatus.CREATED, resp.getStatusCode());
+            assertNotNull(resp.getBody());
+            if (firstOrderId == null) {
+                firstOrderId = resp.getBody().getOrderId();
+            }
+        }
+
+        // 4. Verify 20 orders exist in database
+        assertEquals(20, orderRepository.count());
+
+        // 5. Test GET /orders (List All Orders with Pagination & Sorting)
+        ResponseEntity<String> listResp = restTemplate.getForEntity(baseUrl + "?page=0&size=5&sort=amount,desc", String.class);
+        assertEquals(HttpStatus.OK, listResp.getStatusCode());
+        assertNotNull(listResp.getBody());
+
+        // 6. Test GET /orders/{id} (Show Single Order)
+        ResponseEntity<OrderResponse> showResp = restTemplate.getForEntity(baseUrl + "/" + firstOrderId, OrderResponse.class);
+        assertEquals(HttpStatus.OK, showResp.getStatusCode());
+        assertNotNull(showResp.getBody());
+        assertEquals(firstOrderId, showResp.getBody().getOrderId());
+
+        // 7. Test POST /orders/{id}/status (Update Status)
+        OrderStatusRequest statusReq = new OrderStatusRequest(OrderStatus.SHIPPED);
+        ResponseEntity<OrderResponse> updateStatusResp = restTemplate.postForEntity(baseUrl + "/" + firstOrderId + "/status", statusReq, OrderResponse.class);
+        assertEquals(HttpStatus.OK, updateStatusResp.getStatusCode());
+        assertEquals("SHIPPED", updateStatusResp.getBody().getStatus());
+
+        // 8. Test POST /orders/{id}/cancel (Cancel Order & Stock Restoration)
+        Long secondOrderId = firstOrderId + 1;
+        ResponseEntity<OrderResponse> cancelResp = restTemplate.postForEntity(baseUrl + "/" + secondOrderId + "/cancel", null, OrderResponse.class);
+        assertEquals(HttpStatus.OK, cancelResp.getStatusCode());
+        assertEquals("CANCELLED", cancelResp.getBody().getStatus());
+
+        // 9. Test GET /orders/customer/{customerId} (Filter by Customer)
+        ResponseEntity<String> custOrdersResp = restTemplate.getForEntity(baseUrl + "/customer/" + c1.getId(), String.class);
+        assertEquals(HttpStatus.OK, custOrdersResp.getStatusCode());
+        assertNotNull(custOrdersResp.getBody());
+
+        // 10. Test GET /orders/status/{status} (Filter by Status)
+        ResponseEntity<String> statusFilterResp = restTemplate.getForEntity(baseUrl + "/status/CANCELLED", String.class);
+        assertEquals(HttpStatus.OK, statusFilterResp.getStatusCode());
+        assertNotNull(statusFilterResp.getBody());
     }
 }
