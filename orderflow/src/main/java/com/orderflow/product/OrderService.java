@@ -124,6 +124,7 @@ public class OrderService {
         return convertToResponse(cancelledOrder);
     }
 
+    @Transactional
     public OrderResponse showOrder(Long orderId){
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new OrderNotFoundException(orderId));
@@ -131,18 +132,21 @@ public class OrderService {
         return convertToResponse(order);    
     }
 
+    @Transactional
     public Page<OrderResponse> listAllOrders(Pageable pageable){
         Page<Order> allOrder = orderRepository.findAll(pageable);
 
-        return allOrder.map(this::convertToResponse );
+        return allOrder.map(this::convertToResponse);
     }
 
+    @Transactional
     public Page<OrderResponse> getOrdersByCustomer(Long customerId, Pageable pageable){
         findCustomerById(customerId);
         Page<Order> customerOrders = orderRepository.findByCustomerId(customerId, pageable);
         return customerOrders.map(this::convertToResponse);
     }
 
+    @Transactional
     public Page<OrderResponse> getOrdersByStatus(OrderStatus status, Pageable pageable){
         Page<Order> statusOrders = orderRepository.findByStatus(status, pageable);
         return statusOrders.map(this::convertToResponse);
