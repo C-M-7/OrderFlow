@@ -17,12 +17,16 @@ import com.orderflow.product.exception.OrderNotFoundException;
 
 import jakarta.transaction.Transactional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Service 
 public class OrderService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
     public OrderService(CustomerRepository customerRepository, ProductRepository productRepository, OrderRepository orderRepository, OrderItemRepository orderItemRepository){
         this.customerRepository = customerRepository;
@@ -33,9 +37,13 @@ public class OrderService {
 
     @Transactional 
     public OrderResponse createOrder(OrderRequest orderRequest){
+        log.info("Creating order for customerId: {}", orderRequest.getCustomerId());
         Customer existingCustomer = findCustomerById(orderRequest.getCustomerId());
 
-        if(existingCustomer == null) return null;
+        if(existingCustomer == null) {
+            log.warn("Customer with id {} not found. Aborting order creation.", orderRequest.getCustomerId());
+            return null;
+        }
 
         Order newOrder = new Order(0.0, OrderStatus.PENDING, existingCustomer);
         
@@ -47,7 +55,10 @@ public class OrderService {
             Long currProdId = itemRequest.getProductId();
             Integer requestedQuant = itemRequest.getQuantity();
             Product currProd = findProductById(currProdId);
-            if(currProd == null) continue;
+            if(currProd == null) {
+                log.warn("Product with id {} not found, skipping item", currProdId);
+                continue;
+            }
 
             Long currProdQuan = currProd.getQuantity();
             double currProdPrice = currProd.getPrice();
@@ -67,6 +78,8 @@ public class OrderService {
 
                 OrderItemResponse orderItemResponse = new OrderItemResponse(currProdId, currProd.getName(), requestedQuant, pricePerOrderItem);
                 orderItemResponseList.add(orderItemResponse);
+            } else {
+                log.warn("Insufficient stock for productId: {}. Available: {}, Requested: {}", currProdId, currProdQuan, requestedQuant);
             }
 
         }
@@ -80,6 +93,8 @@ public class OrderService {
             orderItemRepository.save(orderItem);
         }
 
+        log.info("Order created successfully with id: {} and total amount: {}", savedOrder.getId(), orderAmount);
+
         return new OrderResponse(
             savedOrder.getId(),
             existingCustomer,
@@ -91,6 +106,7 @@ public class OrderService {
 
     @Transactional
     public OrderResponse updateOrderStatus(Long orderId, OrderStatus newOrderStatus){
+        log.info("Updating order status for orderId: {} to {}", orderId, newOrderStatus);
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
 
@@ -101,12 +117,14 @@ public class OrderService {
 
         order.setStatus(newOrderStatus);
         Order updatedOrder = orderRepository.save(order);
+        log.info("Order {} status updated from {} to {}", orderId, currentStatus, newOrderStatus);
 
         return convertToResponse(updatedOrder);
     }
 
     @Transactional 
     public OrderResponse cancelOrder(Long orderId){
+        log.info("Cancelling order with id: {}", orderId);
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new OrderNotFoundException(orderId));
         
@@ -120,12 +138,14 @@ public class OrderService {
 
         order.setStatus(OrderStatus.CANCELLED);
         Order cancelledOrder = orderRepository.save(order);
+        log.info("Order {} successfully cancelled and inventory restored", orderId);
 
         return convertToResponse(cancelledOrder);
     }
 
     @Transactional
     public OrderResponse showOrder(Long orderId){
+        log.debug("Fetching order details for orderId: {}", orderId);
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new OrderNotFoundException(orderId));
 
@@ -134,6 +154,7 @@ public class OrderService {
 
     @Transactional
     public Page<OrderResponse> listAllOrders(Pageable pageable){
+        log.debug("Listing all orders with pageable: {}", pageable);
         Page<Order> allOrder = orderRepository.findAll(pageable);
 
         return allOrder.map(this::convertToResponse);
@@ -141,6 +162,7 @@ public class OrderService {
 
     @Transactional
     public Page<OrderResponse> getOrdersByCustomer(Long customerId, Pageable pageable){
+        log.debug("Fetching orders for customerId: {} with pageable: {}", customerId, pageable);
         findCustomerById(customerId);
         Page<Order> customerOrders = orderRepository.findByCustomerId(customerId, pageable);
         return customerOrders.map(this::convertToResponse);
@@ -148,12 +170,14 @@ public class OrderService {
 
     @Transactional
     public Page<OrderResponse> getOrdersByStatus(OrderStatus status, Pageable pageable){
+        log.debug("Fetching orders with status: {} with pageable: {}", status, pageable);
         Page<Order> statusOrders = orderRepository.findByStatus(status, pageable);
         return statusOrders.map(this::convertToResponse);
     }
 
     private void validateStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
         if (!isValidTransition(currentStatus, newStatus)) {
+            log.error("Invalid order status transition from {} to {}", currentStatus, newStatus);
             throw new InvalidOrderStatusException(currentStatus, newStatus);
         }
     }
@@ -205,13 +229,16 @@ public class OrderService {
 
     private void restoreTheProductQuantities(Order order){
         Long orderId = order.getId();
+        log.info("Restoring product quantities for cancelled orderId: {}", orderId);
 
         List<OrderItem> items = orderItemRepository.findByOrderId(orderId);
 
         for(OrderItem orderItem : items){
             Product product = orderItem.getProduct();
-            product.setQuantity(product.getQuantity() + orderItem.getQuantity());
+            long newQuantity = product.getQuantity() + orderItem.getQuantity();
+            product.setQuantity(newQuantity);
             productRepository.save(product);
+            log.debug("Restored {} units for productId: {}, new total: {}", orderItem.getQuantity(), product.getId(), newQuantity);
         }
     }
 }

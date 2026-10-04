@@ -1,25 +1,30 @@
 # 🛒 OrderFlow
 
-Welcome to **OrderFlow**! A backend order management microservice built with **Java 21**, **Spring Boot**, and **MySQL**. 
+Welcome to **OrderFlow**! A robust e-commerce order management microservice built with **Java 21**, **Spring Boot**, **MySQL**, and **MongoDB**.
 
-OrderFlow is designed to handle order processing, real-time inventory adjustments, state transitions, and filtering.
+OrderFlow is designed to handle high-reliability order processing, real-time inventory adjustments, state transition validations, and asynchronous audit trails with polyglot persistence.
 
 ---
 
 ## 🌟 What Makes OrderFlow Special?
 
-Managing e-commerce orders gets tricky when dealing with stock reservation, cancellation refunds/restocking, and status validation. OrderFlow solves these problems:
+Managing e-commerce orders gets tricky when dealing with stock reservation, cancellation restocking, status validation, and audit histories. OrderFlow solves these problems:
 
 - **⚡ Automatic Inventory Reservation**: When an order is placed, item stock is decremented immediately.
 - **🔄 Intelligent Order Cancellation**: Cancelling an order automatically restores reserved product quantities back to stock within a single database transaction (`@Transactional`).
-- **🛡️ Strict Status Transitions**: Orders follow a valid lifecycle (`PENDING` $\rightarrow$ `CONFIRMED` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`). Invalid transitions (like moving directly from `PENDING` to `DELIVERED`) are rejected with clear validation error messages.
+- **🛡️ Strict Status Transitions**: Orders follow a valid lifecycle (`PENDING` $\rightarrow$ `CONFIRMED` $\rightarrow$ `SHIPPED` $\rightarrow$ `DELIVERED`). Invalid transitions are rejected with clear error messages.
+- **📜 Polyglot Persistence & Audit Logging**: Core transactions and relational data are stored in **MySQL**, while immutable event audit logs are captured in **MongoDB** (`order_audits`).
+- **🔍 Comprehensive SLF4J Logging**: Built-in structured logging across all services and exception handlers for observability and debugging.
 - **📊 Pagination & Custom Sorting**: All listing endpoints support page size, page number, and dynamic field sorting out-of-the-box.
 
 ---
 
 ## 🏗️ Architecture & Data Model
 
-OrderFlow connects Customers, Orders, Line Items, Products, and Categories:
+OrderFlow uses a hybrid relational and document persistence model:
+
+### 1. Relational Model (MySQL)
+Connects Customers, Orders, Line Items, Products, and Categories:
 
 ```mermaid
 erDiagram
@@ -59,16 +64,32 @@ erDiagram
     }
 ```
 
+### 2. Audit Document Model (MongoDB)
+Captures chronological event history in the `order_audits` collection:
+
+```json
+{
+  "_id": "ObjectId(...)",
+  "orderId": 101,
+  "action": "ORDER_CREATED",
+  "timestamp": "2026-10-04T05:49:30.524Z",
+  "details": "Testing MongoDB integration",
+  "_class": "com.orderflow.audit.OrderAudit"
+}
+```
+
 ---
 
 ## 🛠️ Tech Stack
 
 - **Java 21** & **Spring Boot**
-- **Spring Data JPA** & **Hibernate**
-- **MySQL 8.4** (Production & Docker)
+- **Spring Data JPA** & **Hibernate** (MySQL)
+- **Spring Data MongoDB** (Audit Logs)
+- **MySQL 8.4** & **MongoDB Latest** (Containerized via Docker)
 - **H2 Database** (In-Memory for Integration & Unit Tests)
+- **SLF4J & Logback** (Structured application logging)
 - **Docker & Docker Compose**
-- **JUnit 5 & Mockito** (30+ automated tests)
+- **JUnit 5 & Mockito** (Automated tests)
 
 ---
 
@@ -76,8 +97,8 @@ erDiagram
 
 ### Prerequisites
 - **JDK 21** or later installed
-- **Docker Desktop** (or a local MySQL instance)
-- **Maven** (bundled via `./mvnw`)
+- **Docker Desktop** (for MySQL & MongoDB containers)
+- **Maven** (bundled via `./mvnw` or installed locally)
 
 ---
 
@@ -90,8 +111,13 @@ DB_USERNAME=root
 DB_PASSWORD=root
 ```
 
-### 2. Start MySQL Container
-Use Docker Compose to launch MySQL in seconds:
+Spring Boot connects to MongoDB via `application.properties`:
+```properties
+spring.mongodb.uri=mongodb://${DB_USERNAME}:${DB_PASSWORD}@localhost:27017/orderflow?authSource=admin
+```
+
+### 2. Start MySQL & MongoDB Containers
+Use Docker Compose to launch both databases:
 
 ```bash
 docker-compose up -d
@@ -121,9 +147,15 @@ The server will start at `http://localhost:8080`.
 | `GET` | `/orders/customer/{customerId}` | List all orders placed by a specific customer |
 | `GET` | `/orders/status/{status}` | Filter orders by status (e.g. `/orders/status/CANCELLED`) |
 
+### 📜 Order Audit API (`/order_audit`)
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/order_audit/test` | Record a test audit log event to MongoDB |
+
 ---
 
-### 💡 Example Requests & Responses
+## 💡 Example Requests & Responses
 
 #### Place an Order (`POST /orders`)
 
@@ -189,7 +221,7 @@ To run the suite of unit and integration tests:
 
 ## 💻 Database Access
 
-To inspect the MySQL database directly:
+### MySQL (Orders, Customers, Products)
 
 **Via Docker:**
 ```bash
@@ -199,4 +231,23 @@ docker exec -it orderflow-mysql mysql -u root -proot orderflow
 **Via Local MySQL CLI:**
 ```bash
 mysql -u root -proot -h localhost -P 3306 orderflow
+```
+
+### MongoDB (Audit Trail & Event Logs)
+
+**Via Docker Shell (`mongosh`):**
+```bash
+docker exec -it orderflow-mongo mongosh "mongodb://root:root@localhost:27017/orderflow?authSource=admin"
+```
+
+Inside the interactive shell:
+```javascript
+use orderflow
+show collections
+db.order_audits.find().pretty()
+```
+
+**Direct One-Liner Query:**
+```bash
+docker exec orderflow-mongo mongosh "mongodb://root:root@localhost:27017/orderflow?authSource=admin" --eval "db.order_audits.find().pretty()"
 ```
